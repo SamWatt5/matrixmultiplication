@@ -1,6 +1,6 @@
 #include "matrix.h"
 
-std::vector<std::vector<int>> Matrix::getContents(){
+std::vector<std::vector<int>> Matrix::getContents() const{
     return contents;
 }
 
@@ -8,19 +8,19 @@ void Matrix::setContents(std::vector<std::vector<int>> new_contents){
     contents = new_contents;
 }
 
-int Matrix::getWidth(){
+int Matrix::getWidth() const{
     return contents[0].size();
 }
 
-int Matrix::getHeight(){
+int Matrix::getHeight() const{
     return contents.size();
 }
 
-std::vector<int> Matrix::getRow(int index) {
+std::vector<int> Matrix::getRow(int index) const{
     return contents[index];
 }
 
-std::vector<int> Matrix::getCol(int index) {
+std::vector<int> Matrix::getCol(int index) const{
     std::vector<int> col;
     for (std::vector<int> row : contents){
         col.push_back(row[index]);

@@ -1,9 +1,10 @@
 #include <cmath>
+#include <thread>
 #include "matrix.h"
 #include "multiply.h"
 
 // Matrix multiplication using no threads
-Matrix MultiplyMatricesBasic(Matrix m1, Matrix m2) {
+Matrix MultiplyMatricesBasic(const Matrix& m1, const Matrix& m2) {
     Matrix result;
     int n = m1.getHeight();
     int m = m1.getWidth();
@@ -27,7 +28,7 @@ Matrix MultiplyMatricesBasic(Matrix m1, Matrix m2) {
 }
 
 // Matrix multiplication using OpenMP for multi-threading
-Matrix MultiplyMatricesUsingOpenMP(Matrix m1, Matrix m2) {
+Matrix MultiplyMatricesUsingOpenMP(Matrix& m1, Matrix& m2) {
     Matrix result;
     int n = m1.getHeight();
     int m = m1.getWidth();
@@ -53,15 +54,16 @@ Matrix MultiplyMatricesUsingOpenMP(Matrix m1, Matrix m2) {
 }
 
 
-void GetSum(int i, int j, int n, int m, int p, Matrix m1, Matrix m2, Matrix& result){
+void GetSum(int row, int col, int n, int m, int p,
+            const Matrix& m1, const Matrix& m2, Matrix& result) {
     int sum = 0;
-    for (int k=0; k<m;++k){
-        sum += m1.getContents()[i][k] * m2.getContents()[k][j];
+    for (int k = 0; k < m; ++k) {
+        sum += m1.getContents()[row][k] * m2.getContents()[k][col];
     }
-    result.setItem(i,j,sum);
+    result.setItem(row, col, sum);
 }
 
-Matrix MultiplyMatricesUsingThreads_OLD(Matrix m1, Matrix m2) {
+Matrix MultiplyMatricesUsingThreads_OLD(Matrix& m1, Matrix& m2) {
     Matrix result;
    int n = m1.getHeight();
     int m = m1.getWidth();
@@ -73,7 +75,7 @@ Matrix MultiplyMatricesUsingThreads_OLD(Matrix m1, Matrix m2) {
     std::vector<std::thread> threads;
     for (int i=0; i<n;++i){
         for (int j=0; j<p;++j){
-            threads.emplace_back(GetSum, i, j, n, m, p, m1, m2, std::ref(result));
+            threads.emplace_back(GetSum, i, j, n, m, p, std::ref(m1), std::ref(m2), std::ref(result));
         }
     }
     for (auto& thread : threads) {
@@ -83,7 +85,7 @@ Matrix MultiplyMatricesUsingThreads_OLD(Matrix m1, Matrix m2) {
     return result;
 }
 
-Matrix MultiplyMatricesUsingThreads_NEW(Matrix m1, Matrix m2) {
+Matrix MultiplyMatricesUsingThreads_NEW(Matrix& m1, Matrix& m2) {
     Matrix result;
    int n = m1.getHeight();
     int m = m1.getWidth();
@@ -103,7 +105,7 @@ Matrix MultiplyMatricesUsingThreads_NEW(Matrix m1, Matrix m2) {
                 }
                 threads.clear();
             }
-            threads.emplace_back(GetSum, i, j, n, m, p, m1, m2, std::ref(result));
+            threads.emplace_back(GetSum, i, j, n, m, p, std::ref(m1), std::ref(m2), std::ref(result));
         }
     }
     // std::cout << threads.size();
@@ -118,7 +120,7 @@ Matrix MultiplyMatricesUsingThreads_NEW(Matrix m1, Matrix m2) {
 }
 
 void GetSums(int iStart, int jStart, int row_step, int col_step,
-             int n, int m, int p, Matrix m1, Matrix m2, Matrix& result) {
+             int n, int m, int p, const Matrix& m1, const Matrix& m2, Matrix& result) {
     int iEnd = std::min(iStart + row_step, n);
     int jEnd = std::min(jStart + col_step, p);
 
@@ -133,7 +135,7 @@ void GetSums(int iStart, int jStart, int row_step, int col_step,
     }
 }
 
-Matrix MultiplyMatricesUsingThreads_NEW_NEW(Matrix m1, Matrix m2) {
+Matrix MultiplyMatricesUsingThreads_Blocking(const Matrix& m1, const Matrix& m2) {
     Matrix result;
     int n = m1.getHeight();
     int m = m1.getWidth();
@@ -156,7 +158,7 @@ Matrix MultiplyMatricesUsingThreads_NEW_NEW(Matrix m1, Matrix m2) {
 
     for (int i = 0; i < n; i += row_step) {
         for (int j = 0; j < p; j += col_step) {
-            threads.emplace_back(GetSums, i, j, row_step, col_step, n, m, p, m1, m2, std::ref(result));
+            threads.emplace_back(GetSums, i, j, row_step, col_step, n, m, p, std::ref(m1), std::ref(m2), std::ref(result));
         }
     }
 
@@ -164,5 +166,42 @@ Matrix MultiplyMatricesUsingThreads_NEW_NEW(Matrix m1, Matrix m2) {
         thread.join();
     }
     
+    return result;
+}
+
+void GetSums_EntireRow(int row,
+                      int n, int m, int p,
+                      const Matrix& m1, const Matrix& m2, Matrix& result) {
+    for (int i = 0; i < n; ++i) {
+        GetSum(row, i, n, m, p, m1, m2, result);
+    }
+}
+
+Matrix MultiplyMatricesUsingThreads_RowBlocks(const Matrix& m1, const Matrix& m2) {
+    Matrix result;
+    int n = m1.getHeight();
+    int m = m1.getWidth();
+    int p = m2.getWidth();
+
+    if (m != m2.getHeight()) {
+        throw std::invalid_argument("invalid matrix dimensions for multiplication");
+    }
+
+    result.createEmptyMatrix(n, p);
+
+    unsigned int max_threads = std::thread::hardware_concurrency();
+    if (max_threads == 0) {
+        max_threads = 1;
+    }
+
+    std::vector<std::thread> threads;
+    for (int row = 0; row < n; ++row) {
+        threads.emplace_back(GetSums_EntireRow, row, n, m, p, std::ref(m1), std::ref(m2), std::ref(result));
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
     return result;
 }
